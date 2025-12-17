@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dahoomy TaskHub</title>
+
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="app">
+        <header class="header">
+            <h1 class="title">TaskHub</h1>
+            <p class="subtitle">Simple tasks</p>
+        </header>
+
+        <main class="main">
+            <section class="card">
+                <h2 class="section-title">Add a task</h2>
+
+                <form action="" class="add-form" id="addForm">
+                    <input 
+                    type="text" 
+                    id="taskInput" 
+                    class="input" 
+                    placeholder="Task Title (required)" 
+                    autocomplete="off"
+                    />
+
+                    <button type="submit" class="btn btn-primary" id="addBtn">
+                        Add
+                    </button>
+                    
+                    <select id="priorityInput" class="input">
+                        <option value="low">Low</option>
+                        <option value="medium">Medium</option>
+                        <option value="high">High</option>
+                    </select>
+                    
+                    <input id="dueDateInput" class="input" type="date"/>
+
+                    <textarea 
+                    id="notesInput"
+                    class="input textarea"
+                    placeholder="Notes (optional)"
+                    rows="3"
+                    ></textarea>
+                </form>
+
+                <p class="hint">
+                    Tip: Keep titles short. You can add notes later.
+                </p>
+            </section>
+
+            <section class="card">
+                <h2 class="section-title">Find tasks</h2>
+
+                <div class="controls">
+                    <input 
+                    type="text" 
+                    id="searchInput" 
+                    class="input" 
+                    placeholder="Search tasks..." 
+                    autocomplete="off">
+
+                    <div class="filters" role="group" aria-label="Task filters">
+                        <button type="button" class="btn btn-filter is-active" data-filter="all">
+                            All
+                        </button>
+                        <button type="button" class="btn btn-filter" data-filter="active">
+                            Active
+                        </button>
+                        <button type="button" class="btn btn-filter" data-filter="completed">
+                            Completed
+                        </button>
+                    </div>
+
+                    <div class="backup">
+                        <button type="button" class="btn btn-filter" id="exportBtn">Export JSON</button>
+                        <button type="button" class="btn btn-filter" id="importBtn">Import JSON</button>
+                        <input type="file" id="importFile" accept="application/json" hidden/>
+                    </div>
+                </div>
+            </section>
+
+            <section class="card">
+                <div class="list-header">
+                    <h2 class="section-title">Your tasks</h2>
+                    <span class="counter" id="taskCounter">0 tasks</span>
+                </div>
+
+                <ul class="task-list" id="taskList">
+                    <!-- Render in app.js -->
+                </ul>
+
+                <div class="empty" id="emptyState">
+                    <p>No tasks yet. Add one above 👆</p>
+                </div>
+            </section>
+        </main>
+
+        <footer class="footer">
+            <small>Built by Dahoomy • TaskHub v1</small>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
