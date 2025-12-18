@@ -48,6 +48,7 @@ No frameworks. No libraries. No build tools.
 ## 📂 Project Structure
 
 TaskHub/
+
 ├── index.html
 
 ├── style.css
