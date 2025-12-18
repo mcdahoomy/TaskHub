@@ -22,3 +22,16 @@ This project focuses on **real-world functionality**, clean structure, and maint
 ---
 
 ## 🧠 Project Purpose
+
+This project was built as a **learning and portfolio project** to practice:
+
+- DOM manipulation without frameworks
+- State-driven rendering
+- Handling real edge cases (editing, persistence, validation)
+- Writing readable, maintainable JavaScript
+
+All features are intentionally implemented using **plain JavaScript**
+
+---
+
+# Tech Stack
