@@ -73,11 +73,25 @@
                         <button type="button" class="btn btn-filter" data-filter="completed">
                             Completed
                         </button>
+
+                        <select id="sortSelect" class="input sort-select">
+                            <option value="newest" selected>Sort by Newest</option>
+                            <option value="oldest">Sort by Oldest</option>
+                            <option value="priority">Sort by Priority (High → Low)</option>
+                            <option value="dueSoon">Sort by Due date (Soonest)</option>
+                            <option value="overdue">Sort by Overdue first</option>
+                        </select>
                     </div>
 
                     <div class="backup">
                         <button type="button" class="btn btn-filter" id="exportBtn">Export JSON</button>
                         <button type="button" class="btn btn-filter" id="importBtn">Import JSON</button>
+
+                        <select id="importMode" class="input import-mode">
+                            <option value="replace">Replace all tasks</option>
+                            <option value="merge">Merge with existing tasks</option>
+                        </select>
+
                         <input type="file" id="importFile" accept="application/json" hidden/>
                     </div>
                 </div>
@@ -87,6 +101,8 @@
                 <div class="list-header">
                     <h2 class="section-title">Your tasks</h2>
                     <span class="counter" id="taskCounter">0 tasks</span>
+
+                    <button type="button" class="btn btn-filter" id="clearCompletedBtn">Clear completed</button>
                 </div>
 
                 <ul class="task-list" id="taskList">

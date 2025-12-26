@@ -1,8 +1,10 @@
 const addForm = document.getElementById("addForm");
 const taskInput = document.getElementById("taskInput");
 const notesInput = document.getElementById("notesInput");
+
 const priorityInput = document.getElementById("priorityInput");
 const dueDateInput = document.getElementById("dueDateInput");
+const sortSelect = document.getElementById("sortSelect");
 
 const searchInput = document.getElementById("searchInput");
 const filterButtons = document.querySelectorAll(".btn-filter");
@@ -14,6 +16,7 @@ const emptyState = document.getElementById("emptyState");
 const exportBtn = document.getElementById("exportBtn");
 const importBtn = document.getElementById("importBtn");
 const importFile = document.getElementById("importFile");
+const importMode = document.getElementById("importMode");
 
 let tasks = [];
 
@@ -21,6 +24,8 @@ let currentFilter = "all";
 let currentSearch = "";
 
 let editingTaskId = null;
+
+let currentSort = "newest";
 
 const STORAGE_KEY = "four_big_guys";
 
@@ -62,6 +67,17 @@ function cleanText(text) {
     return text.trim().replace(/\s+/g, " ");
 }
 
+function priorityRank(priority) {
+    if (priority === "high") return 3;
+    if (priority === "medium") return 2;
+    return 1;
+}
+
+function dueValue(dueDateStr) {
+    if (!dueDateStr) return Number.POSITIVE_INFINITY;
+    return Number(dueDateStr.replaceAll("-", ""));
+}
+
 function getVisibleTasks() {
     let visible = [...tasks];
 
@@ -76,6 +92,28 @@ function getVisibleTasks() {
         visible = visible.filter((task) => 
             task.title.toLowerCase().includes(query) || 
             (task.notes || "").toLowerCase().includes(query));
+    }
+
+    if (currentSort === "newest") {
+        visible.sort((a, b) => b.createdAt - a.createdAt);
+    } else if (currentSort === "oldest") {
+        visible.sort((a, b) => a.createdAt - b.createdAt);
+    } else if (currentSort === "priority") {
+        visible.sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority));
+    } else if (currentSort === "dueSoon") {
+        visible.sort((a, b) => dueValue(a.dueDate) - dueValue(b.dueDate));
+    } else if (currentSort === "overdue") {
+        visible.sort((a, b) => {
+            const aOver = !a.completed && isOverdue(a.dueDate);
+            const bOver = !b.completed && isOverdue(b.dueDate);
+
+            if (aOver !== bOver) return bOver - aOver;
+
+            const dueDiff = dueValue(a.dueDate) - dueValue(b.dueDate);
+            if (dueDiff !== 0) return dueDiff;
+
+            return b.createdAt - a.createdAt;
+        });
     }
 
     return visible;
@@ -188,6 +226,29 @@ function normalizeTask(task) {
         completed: typeof task.completed === "boolean" ? task.completed : false,
         createdAt: typeof task.createdAt === "number" ? task.createdAt : Date.now(),
     }
+}
+
+function ensureUniqueIds(tasksToAdd, existingIds) {
+    const result = [];
+
+    for (const task of tasksToAdd) {
+        let id = task.id;
+
+        if (!id || existingIds.has(id)) {
+            do {
+                id = makeId();
+            } while (existingIds.has(id));
+        }
+
+        existingIds.add(id);
+
+        result.push({
+            ...task,
+            id: id
+        });
+    }
+
+    return result;
 }
 
 function render() {
@@ -394,6 +455,12 @@ for (const btn of filterButtons) {
     });
 }
 
+if (sortSelect) {
+    sortSelect.addEventListener("change", () => {
+        currentSort = sortSelect.value;
+        render();
+    });
+}
 if (exportBtn) {
     exportBtn.addEventListener("click", () => {
         const data = JSON.stringify(tasks, null, 2);
@@ -439,7 +506,25 @@ if (importBtn && importFile) {
                     cleaned.push(normalizeTask(task));
                 }
 
-                tasks = cleaned;
+                const mode = importMode ? importMode.value : "replace";
+
+                if (mode === "replace" && tasks.length > 0) {
+                    const ok = confirm("This will REPLACE ALL current tasks. Continue?");
+                    if (!ok) return;
+                }
+
+                if (mode === "merge") {
+                    const existingIds = new Set(tasks.map((task) => task.id));
+
+                    const uniqueToAdd = ensureUniqueIds(cleaned, existingIds);
+
+                    tasks = tasks.concat(uniqueToAdd);
+                } else {
+                    const existingIds = new Set();
+                    const uniqueImported = ensureUniqueIds(cleaned, existingIds);
+
+                    tasks = uniqueImported;
+                }
 
                 saveTasksToStorage();
                 render();
@@ -457,4 +542,9 @@ if (importBtn && importFile) {
 }
 
 loadTasksFromStorage();
+
+if (sortSelect) {
+    sortSelect.value = currentSort;
+}
+
 render();
