@@ -15,6 +15,8 @@ const emptyState = document.getElementById("emptyState");
 
 const exportBtn = document.getElementById("exportBtn");
 const importBtn = document.getElementById("importBtn");
+const clearCompletedBtn = document.getElementById("clearCompletedBtn");
+
 const importFile = document.getElementById("importFile");
 const importMode = document.getElementById("importMode");
 
@@ -153,6 +155,11 @@ function toggleTaskCompleted(taskId) {
 }
 
 function deleteTask(taskId) {
+    const task = tasks.find((task) => task.id === taskId);
+    if (!task) return;
+
+    const ok = confirmDeleteTask(task);
+    if (!ok) return;
 
     if (editingTaskId === taskId) {
         editingTaskId = null;
@@ -162,6 +169,12 @@ function deleteTask(taskId) {
 
     saveTasksToStorage();
     render();
+}
+
+function confirmDeleteTask(task) {
+    const title = (task.title || "").trim();
+    const label = title.length > 0 ? `"${title}"` : "this task";
+    return confirm(`Delete ${label}? This cannot be undone.`);
 }
 
 function startEditing(taskId) {
@@ -191,6 +204,25 @@ function saveEdit(taskId, newTitleText, newNotesText, newPriorityText, newDueDat
     task.dueDate = newDueDate;
 
     editingTaskId = null;
+    saveTasksToStorage();
+    render();
+}
+
+function clearCompleted() {
+    const completedCount = tasks.filter((task) => task.completed).length;
+
+    if (completedCount === 0 ) return;
+
+    const ok = confirm(`Delete ${completedCount} completed task(s)? This cannot be undone.`);
+    if (!ok) return;
+
+    tasks = tasks.filter((task) => task.completed === false);
+
+    if (editingTaskId) {
+        const stillExists = tasks.some((task) => task.id === editingTaskId);
+        if (!stillExists) editingTaskId = null;
+    }
+
     saveTasksToStorage();
     render();
 }
@@ -276,6 +308,8 @@ function render() {
         checkbox.addEventListener("change", () => {
             toggleTaskCompleted(task.id);
         });
+
+        checkbox.setAttribute("aria-label", `Mark "${task.title}" as ${task.completed ? "not completed" : "completed"}`);
         
         li.appendChild(checkbox);
 
@@ -285,20 +319,28 @@ function render() {
             editInput.className = "input task-edit-input"
             editInput.value = task.title;
 
+            editInput.setAttribute("aria-label", "Edit task title");
+
             const saveBtn = document.createElement("button");
             saveBtn.type = "button";
             saveBtn.className = "task-action task-save";
             saveBtn.textContent = "Save";
+
+            saveBtn.setAttribute("aria-label", `Save changes for "${task.title}"`);
 
             const cancelBtn = document.createElement("button");
             cancelBtn.type = "button";
             cancelBtn.className = "task-action task-cancel"
             cancelBtn.textContent = "Cancel";
 
+            cancelBtn.setAttribute("aria-label", `Cancel editing "${task.title}"`);
+
             const notesEdit = document.createElement("textarea");
             notesEdit.className = "input textarea";
             notesEdit.rows = 3;
             notesEdit.value = task.notes || "";
+
+            notesEdit.setAttribute("aria-label", "Edit task notes");
 
             const prioritySelect = document.createElement("select");
             prioritySelect.className = "input";
@@ -309,10 +351,19 @@ function render() {
             `;
             prioritySelect.value = task.priority || "medium";
 
+            prioritySelect.setAttribute("aria-label", "Edit task priority");
+
             const dueEdit = document.createElement("input");
             dueEdit.type = "date";
             dueEdit.className = "input";
             dueEdit.value = task.dueDate || "";
+
+            dueEdit.setAttribute("aria-label", "Edit task due date");
+
+            const actions = document.createElement("div");
+            actions.className = "task-actions";
+            actions.appendChild(saveBtn);
+            actions.appendChild(cancelBtn);
 
             saveBtn.addEventListener("click", () => {
                 saveEdit(task.id, editInput.value, notesEdit.value, prioritySelect.value, dueEdit.value);
@@ -336,15 +387,34 @@ function render() {
                 }
             });
 
-            li.appendChild(editInput);
-            li.appendChild(notesEdit);
-            li.appendChild(prioritySelect);
-            li.appendChild(dueEdit);
+            prioritySelect.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") {
+                    cancelEditing();
+                }
+            });
 
-            const actions = document.createElement("div");
-            actions.className = "task-actions";
-            actions.appendChild(saveBtn);
-            actions.appendChild(cancelBtn);
+            dueEdit.addEventListener("keydown", (e) => {
+                if (e.key === "Escape") {
+                    cancelEditing();
+                }
+            });
+
+            const panel = document.createElement("div");
+            panel.className = "task-edit-panel";
+
+            const row = document.createElement("div");
+            row.className = "task-edit-row";
+
+
+            panel.appendChild(editInput);
+            panel.appendChild(notesEdit);
+
+            panel.appendChild(prioritySelect);
+            panel.appendChild(dueEdit);
+
+            panel.appendChild(row);
+
+            li.appendChild(panel);
             li.appendChild(actions);
 
             setTimeout(() => editInput.focus(), 0);
@@ -388,10 +458,14 @@ function render() {
             editBtn.className = "task-action task-edit";
             editBtn.textContent = "Edit";
 
+            editBtn.setAttribute("aria-label", `Edit "${task.title}"`);
+
             const delBtn = document.createElement("button");
             delBtn.type = "button";
             delBtn.className = "task-action task-delete";
             delBtn.textContent = "Delete";
+
+            delBtn.setAttribute("aria-label", `Delete "${task.title}"`);
 
             editBtn.addEventListener("click", () => {
                 startEditing(task.id);
@@ -413,6 +487,11 @@ function render() {
 
     const total = tasks.length;
     taskCounter.textContent = total === 1 ? "1 task" : `${total} tasks`;
+
+    if (clearCompletedBtn) {
+        const hasCompleted = tasks.some((task) => task.completed);
+        clearCompletedBtn.style.display = hasCompleted ? "inline-flex" : "none";
+    }
 
     if (tasks.length === 0) {
         emptyState.style.display = "block";
@@ -538,6 +617,12 @@ if (importBtn && importFile) {
         };
 
         reader.readAsText(file);
+    });
+}
+
+if (clearCompletedBtn) {
+    clearCompletedBtn.addEventListener("click", () => {
+        clearCompleted();
     });
 }
 

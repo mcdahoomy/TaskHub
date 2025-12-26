@@ -23,6 +23,7 @@
                     type="text" 
                     id="taskInput" 
                     class="input" 
+                    aria-label="Task title"
                     placeholder="Task Title (required)" 
                     autocomplete="off"
                     />
@@ -30,18 +31,19 @@
                     <button type="submit" class="btn btn-primary" id="addBtn">
                         Add
                     </button>
-                    
-                    <select id="priorityInput" class="input">
+
+                    <select id="priorityInput" class="input" aria-label="Priority">
                         <option value="low">Low</option>
                         <option value="medium">Medium</option>
                         <option value="high">High</option>
                     </select>
                     
-                    <input id="dueDateInput" class="input" type="date"/>
+                    <input id="dueDateInput" class="input" type="date" aria-label="Due date"/>
 
                     <textarea 
                     id="notesInput"
                     class="input textarea"
+                    aria-label="Task notes"
                     placeholder="Notes (optional)"
                     rows="3"
                     ></textarea>
@@ -60,6 +62,7 @@
                     type="text" 
                     id="searchInput" 
                     class="input" 
+                    aria-label="Search tasks"
                     placeholder="Search tasks..." 
                     autocomplete="off">
 
@@ -74,7 +77,7 @@
                             Completed
                         </button>
 
-                        <select id="sortSelect" class="input sort-select">
+                        <select id="sortSelect" class="input sort-select" aria-label="Sort tasks">
                             <option value="newest" selected>Sort by Newest</option>
                             <option value="oldest">Sort by Oldest</option>
                             <option value="priority">Sort by Priority (High → Low)</option>
@@ -87,7 +90,7 @@
                         <button type="button" class="btn btn-filter" id="exportBtn">Export JSON</button>
                         <button type="button" class="btn btn-filter" id="importBtn">Import JSON</button>
 
-                        <select id="importMode" class="input import-mode">
+                        <select id="importMode" class="input import-mode" aria-label="Import mode">
                             <option value="replace">Replace all tasks</option>
                             <option value="merge">Merge with existing tasks</option>
                         </select>
@@ -100,9 +103,11 @@
             <section class="card">
                 <div class="list-header">
                     <h2 class="section-title">Your tasks</h2>
-                    <span class="counter" id="taskCounter">0 tasks</span>
 
-                    <button type="button" class="btn btn-filter" id="clearCompletedBtn">Clear completed</button>
+                    <div class="list-actions">
+                        <span class="counter" id="taskCounter" aria-live="polite">0 tasks</span>
+                        <button type="button" class="btn btn-filter" id="clearCompletedBtn">Clear completed</button>
+                    </div>
                 </div>
 
                 <ul class="task-list" id="taskList">
