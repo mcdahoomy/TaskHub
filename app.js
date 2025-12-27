@@ -20,6 +20,8 @@ const clearCompletedBtn = document.getElementById("clearCompletedBtn");
 const importFile = document.getElementById("importFile");
 const importMode = document.getElementById("importMode");
 
+const manualHint = document.getElementById("manualHint");
+
 let tasks = [];
 
 let currentFilter = "all";
@@ -28,6 +30,16 @@ let currentSearch = "";
 let editingTaskId = null;
 
 let currentSort = "newest";
+
+let editingDraft = null;
+
+let draggingId = null;
+
+function renumberManualOrder() {
+    for (let i = 0; i < tasks.length; i++) {
+        tasks[i].order = (i + 1) * 1000;
+    }
+}
 
 const STORAGE_KEY = "four_big_guys";
 
@@ -41,19 +53,15 @@ function loadTasksFromStorage() {
     if (!saved) return;
 
     try {
-        tasks = JSON.parse(saved);
+        const parsed = JSON.parse(saved);
 
-        tasks.forEach((task) => {
-            if (typeof task.notes !== "string") task.notes = "";
-        });
+        if (!Array.isArray(parsed)) {
+            tasks = [];
+            saveTasksToStorage();
+            return;
+        }
 
-        tasks.forEach((task) => {
-            if (typeof task.priority !== "string") task.priority = "medium";
-        });
-
-        tasks.forEach((task) => {
-            if (typeof task.dueDate !== "string") task.dueDate = "";
-        });
+        tasks = parsed.map((task) => normalizeTask(task));
     } catch (err) {
         console.log("Could not read saved tasks. Resetting storage");
         tasks = [];
@@ -96,26 +104,43 @@ function getVisibleTasks() {
             (task.notes || "").toLowerCase().includes(query));
     }
 
-    if (currentSort === "newest") {
-        visible.sort((a, b) => b.createdAt - a.createdAt);
-    } else if (currentSort === "oldest") {
-        visible.sort((a, b) => a.createdAt - b.createdAt);
-    } else if (currentSort === "priority") {
-        visible.sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority));
-    } else if (currentSort === "dueSoon") {
-        visible.sort((a, b) => dueValue(a.dueDate) - dueValue(b.dueDate));
-    } else if (currentSort === "overdue") {
-        visible.sort((a, b) => {
-            const aOver = !a.completed && isOverdue(a.dueDate);
-            const bOver = !b.completed && isOverdue(b.dueDate);
+    switch (currentSort) {
+        case "manual":
+            visible.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+            break;
 
-            if (aOver !== bOver) return bOver - aOver;
+        case "newest":
+            visible.sort((a, b) => b.createdAt - a.createdAt);
+            break;
 
-            const dueDiff = dueValue(a.dueDate) - dueValue(b.dueDate);
-            if (dueDiff !== 0) return dueDiff;
+        case "oldest":
+            visible.sort((a, b) => a.createdAt - b.createdAt);
+            break;
 
-            return b.createdAt - a.createdAt;
-        });
+        case "priority":
+            visible.sort((a, b) => priorityRank(b.priority) - priorityRank(a.priority));
+            break;
+
+        case "dueSoon":
+            visible.sort((a, b) => dueValue(a.dueDate) - dueValue(b.dueDate));
+            break;
+
+        case "overdue":
+            visible.sort((a, b) => {
+                const aOver = !a.completed && isOverdue(a.dueDate);
+                const bOver = !b.completed && isOverdue(b.dueDate);
+
+                if (aOver !== bOver) return bOver - aOver;
+
+                const dueDiff = dueValue(a.dueDate) - dueValue(b.dueDate);
+                if (dueDiff !== 0) return dueDiff;
+
+                return b.createdAt - a.createdAt;
+            });
+            break;
+
+        default:
+            break;
     }
 
     return visible;
@@ -136,7 +161,8 @@ function addTask(titleText, notesText, priorityText, dueDateText) {
         priority: priority,
         dueDate: dueDate,
         completed: false,
-        createdAt: Date.now()
+        createdAt: Date.now(),
+        order: Date.now()
     };
 
     tasks.unshift(newTask);
@@ -179,11 +205,13 @@ function confirmDeleteTask(task) {
 
 function startEditing(taskId) {
     editingTaskId = taskId;
+    editingDraft = null;
     render();
 }
 
 function cancelEditing() {
     editingTaskId = null;
+    editingDraft = null;
     render();
 }
 
@@ -204,6 +232,7 @@ function saveEdit(taskId, newTitleText, newNotesText, newPriorityText, newDueDat
     task.dueDate = newDueDate;
 
     editingTaskId = null;
+    editingDraft = null;
     saveTasksToStorage();
     render();
 }
@@ -230,7 +259,12 @@ function clearCompleted() {
 function isOverdue(dueDateStr) {
     if (!dueDateStr) return false;
 
-    const today = new Date().toISOString().slice(0, 10);
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, "0");
+    const day = String(now.getDate()).padStart(2, "0");
+    const today = `${year}-${month}-${day}`;
+
     return dueDateStr < today;
 }
 
@@ -250,14 +284,15 @@ function isValidTask(obj) {
 
 function normalizeTask(task) {
     return {
-        id: task.id,
-        title: task.title,
+        id: typeof task.id === "string" ? task.id : makeId(),
+        title: typeof task.title === "string" ? task.title : "Untitled task",
         notes: typeof task.notes === "string" ? task.notes : "",
         priority: typeof task.priority === "string" ? task.priority : "medium",
         dueDate: typeof task.dueDate === "string" ? task.dueDate : "",
         completed: typeof task.completed === "boolean" ? task.completed : false,
         createdAt: typeof task.createdAt === "number" ? task.createdAt : Date.now(),
-    }
+        order: typeof task.order === "number" ? task.order : Date.now(),
+    };
 }
 
 function ensureUniqueIds(tasksToAdd, existingIds) {
@@ -281,6 +316,52 @@ function ensureUniqueIds(tasksToAdd, existingIds) {
     }
 
     return result;
+}
+
+function isMac() {
+    return navigator.platform.toLowerCase().includes("mac");
+}
+
+function isTypingInInput(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+}
+
+function focusSearch() {
+    if (!searchInput) return;
+    searchInput.focus();
+    searchInput.select?.();
+}
+
+function focusNewTask() {
+    if (!taskInput) return;
+    taskInput.focus();
+    taskInput.select?.();
+}
+
+function moveTaskById(taskId, beforeTaskId) {
+    tasks.sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+    const fromIndex = tasks.findIndex((task) => task.id === taskId);
+    if (fromIndex === -1) return;
+
+    const [moved] = tasks.splice(fromIndex, 1);
+
+    if (!beforeTaskId) {
+        tasks.push(moved);
+    } else {
+        const toIndex = tasks.findIndex((task) => task.id === beforeTaskId);
+        if (toIndex === -1) {
+            tasks.push(moved);
+        } else {
+            tasks.splice(toIndex, 0, moved);
+        }
+    }
+
+    renumberManualOrder();
+    saveTasksToStorage();
+    render();
 }
 
 function render() {
@@ -360,6 +441,13 @@ function render() {
 
             dueEdit.setAttribute("aria-label", "Edit task due date");
 
+            editingDraft = {
+                title: editInput.value,
+                notes: notesEdit.value,
+                priority: prioritySelect.value,
+                dueDate: dueEdit.value
+            };
+
             const actions = document.createElement("div");
             actions.className = "task-actions";
             actions.appendChild(saveBtn);
@@ -373,30 +461,24 @@ function render() {
                 cancelEditing();
             });
 
-            editInput.addEventListener("keydown", (e) => {
-                if (e.key === "Enter") {
-                    saveEdit(task.id, editInput.value, notesEdit.value, prioritySelect.value, dueEdit.value);
-                } else if (e.key === "Escape") {
-                    cancelEditing();
-                }
+            editInput.addEventListener("input", () => {
+                if (!editingDraft) editingDraft = {};
+                editingDraft.title = editInput.value;
             });
 
-            notesEdit.addEventListener("keydown", (e) => {
-                if (e.key === "Escape") {
-                    cancelEditing();
-                }
+            notesEdit.addEventListener("input", () => {
+                if (!editingDraft) editingDraft = {};
+                editingDraft.notes = notesEdit.value;
             });
 
-            prioritySelect.addEventListener("keydown", (e) => {
-                if (e.key === "Escape") {
-                    cancelEditing();
-                }
+            prioritySelect.addEventListener("change", () => {
+                if (!editingDraft) editingDraft = {};
+                editingDraft.priority = prioritySelect.value;
             });
 
-            dueEdit.addEventListener("keydown", (e) => {
-                if (e.key === "Escape") {
-                    cancelEditing();
-                }
+            dueEdit.addEventListener("change", () => {
+                if (!editingDraft) editingDraft = {};
+                editingDraft.dueDate = dueEdit.value;
             });
 
             const panel = document.createElement("div");
@@ -405,13 +487,11 @@ function render() {
             const row = document.createElement("div");
             row.className = "task-edit-row";
 
+            row.appendChild(prioritySelect);
+            row.appendChild(dueEdit);
 
             panel.appendChild(editInput);
             panel.appendChild(notesEdit);
-
-            panel.appendChild(prioritySelect);
-            panel.appendChild(dueEdit);
-
             panel.appendChild(row);
 
             li.appendChild(panel);
@@ -480,6 +560,45 @@ function render() {
             actions.appendChild(editBtn);
             actions.appendChild(delBtn);
             li.appendChild(actions);
+
+            const manualMode = currentSort === "manual";
+            li.draggable = manualMode && editingTaskId !== task.id;
+            li.classList.toggle("is-draggable", li.draggable);
+
+            if (li.draggable) {
+                li.addEventListener("dragstart", (e) => {
+                    e.dataTransfer.setData("text/plain", task.id);
+                    e.dataTransfer.effectAllowed = "move";
+                    li.classList.add("is-dragging");
+                });
+
+                li.addEventListener("dragend", () => {
+                    li.classList.remove("is-dragging");
+                    document.querySelectorAll(".task-item.is-drop-target")
+                        .forEach((el) => el.classList.remove("is-drop-target"));
+                });
+
+                li.addEventListener("dragover", (e) => {
+                    e.preventDefault();
+                    e.dataTransfer.dropEffect = "move";
+
+                    li.classList.add("is-drop-target");
+                });
+
+                li.addEventListener("dragleave", () => {
+                    li.classList.remove("is-drop-target");
+                });
+
+                li.addEventListener("drop", (e) => {
+                    e.preventDefault();
+                    li.classList.remove("is-drop-target");
+
+                    const draggedId = e.dataTransfer.getData("text/plain");
+                    if (!draggedId || draggedId === task.id) return;
+
+                    moveTaskById(draggedId, task.id);
+                });
+            }
         }
 
         taskList.appendChild(li);
@@ -504,132 +623,202 @@ function render() {
     }
 }
 
-addForm.addEventListener("submit", (e) => {
+taskList.addEventListener("dragover", (e) => {
+    if (currentSort !== "manual") return;
+    e.preventDefault();
+});
+
+taskList.addEventListener("drop", (e) => {
+    if (currentSort !== "manual") return;
     e.preventDefault();
 
-    addTask(taskInput.value, notesInput.value, priorityInput.value, dueDateInput.value);
+    const draggedId = e.dataTransfer.getData("text/plain");
+    if (!draggedId) return;
 
-    taskInput.value = "";
-    notesInput.value = "";
-    priorityInput.value = "medium";
-    dueDateInput.value = "";
-    taskInput.focus();
+    const droppedOnTask = e.target.closest(".task-item");
+    if (!droppedOnTask) {
+        moveTaskById(draggedId, null);
+    }
 });
 
-searchInput.addEventListener("input", () => {
-    currentSearch = cleanText(searchInput.value);
-    render();
-});
+function wireEvents() {
+    addForm.addEventListener("submit", (e) => {
+        e.preventDefault();
 
-for (const btn of filterButtons) {
-    btn.addEventListener("click", () => {
-        currentFilter = btn.dataset.filter;
+        addTask(taskInput.value, notesInput.value, priorityInput.value, dueDateInput.value);
 
-        for (const other of filterButtons) {
-            other.classList.remove("is-active");
-        }
-        btn.classList.add("is-active");
+        taskInput.value = "";
+        notesInput.value = "";
+        priorityInput.value = "medium";
+        dueDateInput.value = "";
+        taskInput.focus();
+    });
 
+    searchInput.addEventListener("input", () => {
+        currentSearch = cleanText(searchInput.value);
         render();
     });
-}
 
-if (sortSelect) {
-    sortSelect.addEventListener("change", () => {
-        currentSort = sortSelect.value;
-        render();
-    });
-}
-if (exportBtn) {
-    exportBtn.addEventListener("click", () => {
-        const data = JSON.stringify(tasks, null, 2);
+    for (const btn of filterButtons) {
+        btn.addEventListener("click", () => {
+            currentFilter = btn.dataset.filter;
 
-        const blob = new Blob([data], {type: "application/json"});
-        const url = URL.createObjectURL(blob);
+            for (const other of filterButtons) {
+                other.classList.remove("is-active");
+            }
+            btn.classList.add("is-active");
 
-        const a = document.createElement("a");
-        a.href = url;
-        a.download = "taskhub-backup.json";
-        a.click();
+            render();
+        });
+    }
 
-        URL.revokeObjectURL(url);
-    }); 
-}
+    if (exportBtn) {
+        exportBtn.addEventListener("click", () => {
+            const data = JSON.stringify(tasks, null, 2);
 
-if (importBtn && importFile) {
-    importBtn.addEventListener("click", () => {
-        importFile.click();
-    });
+            const blob = new Blob([data], {type: "application/json"});
+            const url = URL.createObjectURL(blob);
 
-    importFile.addEventListener("change", () => {
-        const file = importFile.files[0]
-        if (!file) return;
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "taskhub-backup.json";
+            a.click();
 
-        const reader = new FileReader();
+            URL.revokeObjectURL(url);
+        });
+    }
 
-        reader.onload = () => {
-            try {
-                const parsed = JSON.parse(reader.result);
+    if (importBtn && importFile) {
+        importBtn.addEventListener("click", () => {
+            importFile.value = "";
+            importFile.click();
+        });
 
-                if (!Array.isArray(parsed)) {
-                    alert("Import failed: file must contain an array of tasks.");
-                    return;
-                }
+        importFile.addEventListener("change", () => {
+            const file = importFile.files[0]
+            if (!file) return;
 
-                const cleaned = [];
-                for (const task of parsed) {
-                    if (!isValidTask(task)) {
-                        alert("Import failed: invalid task format found.");
+            const reader = new FileReader();
+
+            reader.onload = () => {
+                try {
+                    const parsed = JSON.parse(reader.result);
+
+                    if (!Array.isArray(parsed)) {
+                        alert("Import failed: file must contain an array of tasks.");
                         return;
                     }
-                    cleaned.push(normalizeTask(task));
+
+                    const cleaned = [];
+                    for (const task of parsed) {
+                        if (!isValidTask(task)) {
+                            alert("Import failed: invalid task format found.");
+                            return;
+                        }
+                        cleaned.push(normalizeTask(task));
+                    }
+
+                    const mode = importMode ? importMode.value : "replace";
+
+                    if (mode === "replace" && tasks.length > 0) {
+                        const ok = confirm("This will REPLACE ALL current tasks. Continue?");
+                        if (!ok) return;
+                    }
+
+                    if (mode === "merge") {
+                        const existingIds = new Set(tasks.map((task) => task.id));
+
+                        const uniqueToAdd = ensureUniqueIds(cleaned, existingIds);
+
+                        tasks = tasks.concat(uniqueToAdd);
+                    } else {
+                        const existingIds = new Set();
+                        const uniqueImported = ensureUniqueIds(cleaned, existingIds);
+
+                        tasks = uniqueImported;
+                    }
+
+                    saveTasksToStorage();
+                    render();
+
+                    alert("Import successful!");
+                } catch (err) {
+                    alert("Import failed: invalid JSON file.")
+                } finally {
+                    importFile.value = "";
                 }
+            };
 
-                const mode = importMode ? importMode.value : "replace";
+            reader.readAsText(file);
+        });
+    }
 
-                if (mode === "replace" && tasks.length > 0) {
-                    const ok = confirm("This will REPLACE ALL current tasks. Continue?");
-                    if (!ok) return;
-                }
+    if (sortSelect) {
+        sortSelect.value = currentSort;
 
-                if (mode === "merge") {
-                    const existingIds = new Set(tasks.map((task) => task.id));
+        function updateManualHint() {
+            if (!manualHint) return;
+            manualHint.hidden = currentSort !== "manual";
+        }
 
-                    const uniqueToAdd = ensureUniqueIds(cleaned, existingIds);
+        sortSelect.addEventListener("change", () => {
+            currentSort = sortSelect.value;
+            updateManualHint();
+            render();
+        });
 
-                    tasks = tasks.concat(uniqueToAdd);
-                } else {
-                    const existingIds = new Set();
-                    const uniqueImported = ensureUniqueIds(cleaned, existingIds);
+        updateManualHint();
+    }
 
-                    tasks = uniqueImported;
-                }
+    if (clearCompletedBtn) {
+        clearCompletedBtn.addEventListener("click", () => {
+            clearCompleted();
+        });
+    }
 
-                saveTasksToStorage();
-                render();
+    document.addEventListener("keydown", (e) => {
+        const mac = isMac();
+        const cmdOrCtrl = mac ? e.metaKey : e.ctrlKey;
 
-                alert("Import successful!");
-            } catch (err) {
-                alert("Import failed: invalid JSON file.")
-            } finally {
-                importFile.value = "";
+        // Ctrl/⌘ + K => focus search (override browser find ONLY if you want)
+        if (cmdOrCtrl && e.key.toLowerCase() === "k") {
+            e.preventDefault();
+            focusSearch();
+            return;
+        }
+
+        // Alt + N => focus new task title
+        if (e.altKey && e.key.toLowerCase() === "n") {
+            e.preventDefault();
+            focusNewTask();
+            return;
+        }
+
+        // "/" => focus search (only if you're not typing already)
+        if (e.key === "/" && !isTypingInInput(document.activeElement)) {
+            e.preventDefault();
+            focusSearch();
+            return;
+        }
+
+        // Ctrl/⌘ + Enter => save while editing
+        if (cmdOrCtrl && e.key === "Enter" && editingTaskId) {
+            e.preventDefault();
+
+            if (editingDraft) {
+                saveEdit(
+                    editingTaskId,
+                    editingDraft.title,
+                    editingDraft.notes,
+                    editingDraft.priority,
+                    editingDraft.dueDate
+                );
             }
-        };
-
-        reader.readAsText(file);
-    });
-}
-
-if (clearCompletedBtn) {
-    clearCompletedBtn.addEventListener("click", () => {
-        clearCompleted();
+        }
     });
 }
 
 loadTasksFromStorage();
 
-if (sortSelect) {
-    sortSelect.value = currentSort;
-}
-
+wireEvents();
 render();

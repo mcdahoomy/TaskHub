@@ -338,6 +338,26 @@ textarea:focus-visible {
     min-width: 160px;
 }
 
+.task-item.is-draggable {
+    cursor: grab;
+}
+
+.task-item.is-dragging {
+    opacity: 0.5;
+    cursor: grabbing;
+}
+
+.task-item.is-drop-target {
+    outline: 2px dashed rgba(255, 255, 255, 0.35);
+    outline-offset: 6px;
+}
+
+.hint-sort {
+    margin: 8px 0 0;
+    opacity: 0.8;
+    font-size: 0.9rem;
+}
+
 @media (max-width: 520px) {
     .add-form {
         grid-template-columns: 1fr;
